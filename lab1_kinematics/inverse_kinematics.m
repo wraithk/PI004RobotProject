@@ -5,8 +5,8 @@ function [wl, wr] = inverse_kinematics(u, q)
 % The scale parameter and wheel track required to solve this are provided here.
 % You can find these values in the robot simulator as well.
 % In real-life, you would have to measure or calibrate them!
-scale_parameter = 4.50e-3;
-wheel_track = 0.12;
+scale_parameter = 5.9e-3; % Real: 4.15e-3 %5.0-5.5
+wheel_track = 0.15; % Real: 0.12
 
 wl = u/scale_parameter - wheel_track*q/(2*scale_parameter);
 wr = u/scale_parameter + wheel_track*q/(2*scale_parameter);

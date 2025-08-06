@@ -10,13 +10,13 @@ angular_velocity = (2*pi)/driving_time;
 [wl, wr] = inverse_kinematics(velocity, angular_velocity);
 
 % Maximum time per command
-max_time_per_command = 19;
+max_time_per_command = 4;
 
 if driving_time <= max_time_per_command
-    % Single command if total time is 20 seconds or less
+    % Single command if total time is 4 seconds or less
     pb.setVelocity([wl wr], driving_time);
 else
-    % Break into multiple commands of 20 seconds each
+    % Break into multiple commands of 4 seconds each
     num_full_segments = floor(driving_time / max_time_per_command);
     remaining_time = driving_time - (num_full_segments * max_time_per_command);
     

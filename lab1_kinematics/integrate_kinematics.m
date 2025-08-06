@@ -7,7 +7,7 @@ function new_state = integrate_kinematics(state, dt, lin_velocity, ang_velocity)
 %   ang_velocity is the angular velocity of the robot
 
 %   new_state is the state after integration, also in the form [x;y;theta]
-if (ang_velocity < 1e-6)
+if (ang_velocity < 1e-7)
     new_state(1) = state(1) + (lin_velocity/ang_velocity)*(sin(state(3)+dt*ang_velocity)-sin(state(3)));
     new_state(2) = state(2) + (lin_velocity/ang_velocity)*(cos(state(3)+dt*ang_velocity)-cos(state(3)));
     new_state(3) = state(3) + dt*ang_velocity;
