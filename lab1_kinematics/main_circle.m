@@ -10,10 +10,10 @@ pb = PiBot('192.168.50.1');
 %pb.place([2.5;1.5], 0);
 
 % Drive a circle of radius 1m
-drive_circle(pb, 0.2);
+%drive_circle(pb, 1);
 
 % Place the robot at the bottom of another circle
-pb.place([2.5;0.5], 0);
+%pb.place([2.5;0.5], 0);
 
 % Drive a circle of radius 2m
-drive_circle(pb, 2);
+drive_circle(pb, 0.5);
