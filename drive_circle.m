@@ -20,7 +20,7 @@ else
     num_full_segments = floor(driving_time / max_time_per_command);
     remaining_time = driving_time - (num_full_segments * max_time_per_command);
     
-    % Send full 4-second segments
+    % Send full 20-second segments
     for i = 1:num_full_segments
         pb.setVelocity([wl wr], max_time_per_command);
     end

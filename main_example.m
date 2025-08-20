@@ -1,5 +1,5 @@
 % This example file demonstrates how to operate the robot simulator
-addpath("../simulator/"); % Add the simulator to the MATLAB path.
+addpath("simulator/"); % Add the simulator to the MATLAB path.
 
 % First, you must instantiate the simulator. You can specify the image to
 % use as the floor if you wish.
