@@ -26,25 +26,25 @@ while true
     bin_img  = ~imbinarize(gray_img);  % assume dark line on light floor; use Otsu
     % Check the video
     [H, W] = size(bin_img);
-    roi = bin_img(round(0.7*H):H, :);      % bottom 30% of the image
+    roi = bin_img(round(0.6*H):H, :);      % bottom 30% of the image
     imshow(roi, "Parent", camAxes); 
     
     [r,c] = find(roi==1);
     centre_of_mass = [mean(c),mean(r)];
     
     err = (centre_of_mass(1) - (W)/2) / (W/2);        % range approx [-1, 1]
-    Kp_turn = -0.4;              
+    Kp_turn = -0.5;              
     q = Kp_turn * err;             
     
-    u_base = 0.3;                 
-    u_min  = 0.01;
+    u_base = 0.2;                 
+    u_min  = 0.05;
     u = max(u_min, u_base * (1 - min(abs(err), 1)));
     
 
     [wl, wr] = inverse_kinematics(u, q);
     
     pb.setVelocity(wl, wr);
-
+    drawnow();
 end
 
 

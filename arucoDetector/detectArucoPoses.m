@@ -6,11 +6,12 @@ function [marker_nums, landmark_centres, marker_corners] = detectArucoPoses(imag
 %   of the markers.
 %
 %   You can load cameraParams and arucoDict using:
-%   addpath("include")
-%   addpath("dictionary")
-%   load("arucoDict.mat")
-%   load("cameraParameters.mat")
-%   
+
+% addpath("include")
+% addpath("dictionary")
+% load("arucoDict.mat")
+% load("cameraParameters.mat")
+
 %   IF DETECTION ISN'T PERFORMING AS EXPECTED START HERE
 %   You can vary some detection hyperparameters and choose to plot the
 %   detected markers and their poses using the properties in ArunoDetc.m

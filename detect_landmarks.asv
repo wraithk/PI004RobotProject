@@ -28,7 +28,7 @@ while true
     img = pb.getImage();
     imshow(img, "Parent", camAxes); % Check the video
     [marker_nums, landmark_centres, marker_corners] = detectArucoPoses(img, 0.07, CamParam.cameraParams, ArucoDict.arucoDict);
-    disp(marker_nums);
+    disp([marker_nums,landmark_centres,marker_corners]);
     drawnow;
 
 end
