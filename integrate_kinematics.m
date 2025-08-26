@@ -16,6 +16,4 @@ else
     new_state(1) = state(1) + dt*cos(state(3))*lin_velocity;
     new_state(2) = state(2) + dt*sin(state(3))*lin_velocity;
     new_state(3) = state(3);
-
-    
 end
