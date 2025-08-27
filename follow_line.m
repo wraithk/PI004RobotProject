@@ -1,62 +1,126 @@
 % Calibrate the scale parameter and wheel track of the robot
 addpath("simulator/"); % Add the simulator to the MATLAB path.
-%pb = piBotSim("floor_spiral.jpg");
-
-% Start by placing your robot at the start of the line
-%pb.place([2.5;2.5], 0.6421);
-
+% pb = piBotSim("floor_spiral.jpg");
+% pb.place([2.5;2.5], 0.6421);
 pb = PiBot('192.168.50.1'); % Use this command instead if using PiBot.
 
-% Create a window to visualise the robot camera
-figure;
-camAxes = axes();
+% --- Visualisation: camera view
+figure('Name','PiBot Camera & Landmark Radar','NumberTitle','off');
+tiledlayout(1,2,'Padding','compact','TileSpacing','compact');
+camAxes = nexttile; title(camAxes,'Bottom-ROI binarised'); axis(camAxes,'ij');
+landAxes = nexttile; hold(landAxes,'on'); grid(landAxes,'on'); axis(landAxes,'equal');
+xlabel(landAxes,'x forward (m)'); ylabel(landAxes,'y left (m)'); title(landAxes,'Landmark Radar (Robot at [0,0])');
+xlim(landAxes,[-0.5 1.5]); ylim(landAxes,[-1 1]); % tweak as needed
+robotDot = plot(landAxes,0,0,'ko','MarkerFaceColor','k','MarkerSize',6);
+landPts  = scatter(landAxes,nan,nan,'filled');
+landTxt  = []; % handles to text labels
 
-%  Follow the line in a loop
-prev_err = 0; % Initialize previous error for derivative term
-dt = 0.1; % Assumed time step (adjust based on your loop timing)
+% --- ArUco & camera params
+addpath('arucoDetector/include');
+addpath('arucoDetector');
+addpath("arucoDetector/dictionary");
+ArucoDict = load("arucoDict.mat");
+addpath("CamCal");
+CamParam = load("CamParam.mat");
 
+% --- Line following control state
+prev_err = 0; 
+err_valid = false;
+
+% Controller gains
+Kp_turn = -0.5;    % P gain
+Kd_turn = -0.1;    % D gain (start ~20% of Kp)
+
+u_base = 0.2;      % nominal forward speed
+u_min  = 0.05;     % do not drop below this
+
+% --- Robust dt estimation: tic/toc per loop + EMA smoothing & clamping
+dt_ema = 0.1;      % initial guess
+ema_alpha = 0.2;   % smoothing factor (0..1) – higher = quicker response
+dt_min = 0.01;     % 100 Hz cap
+dt_max = 0.2;      % 5 Hz floor
+
+loop_tic = tic;
 while true
-    % First, get the current camera frame
+    % Measure instantaneous dt and smooth it
+    dt_inst = toc(loop_tic);
+    if isfinite(dt_inst) && dt_inst > 0
+        dt_inst = max(min(dt_inst, dt_max), dt_min);      % clamp outliers
+        dt_ema  = ema_alpha*dt_inst + (1-ema_alpha)*dt_ema;
+    end
+    loop_tic = tic;  % reset timer for next loop
+    
+    % --- Get current camera frame
     img = pb.getImage();
-    % Detect any visible landmarks and record their ids
-    % Find the centre of the line to follow
-    % Binarise the image by picking some sensible threshold
-    % --- Find line centre using a bottom ROI, then compute a normalised error (-1..1)
+
+    % --- Detect landmarks (IDs and their centres relative to camera/robot)
+    % NOTE: detectArucoPoses returns [marker_nums, landmark_centres, marker_corners]
+    % where landmark_centres is Nx3 in metres in the camera frame.
+    [marker_nums, landmark_centres, marker_corners] = detectArucoPoses( ...
+        img, 0.07, CamParam.cameraParams, ArucoDict.arucoDict);
+
+    % --- Binarise and find line centre using bottom ROI
     gray_img = rgb2gray(img);
-    bin_img = ~imbinarize(gray_img); % assume dark line on light floor; use Otsu
-    % Check the video
-    [H, W] = size(bin_img);
-    roi = bin_img(round(0.6*H):H, :); % bottom 40% of the image
-    imshow(roi, "Parent", camAxes);
-    
+    bin_img  = ~imbinarize(gray_img);                % dark line on light floor
+    [H, W]   = size(bin_img);
+    roi      = bin_img(round(0.6*H):H, :);           % bottom 40%
+    imshow(roi, "Parent", camAxes); title(camAxes,'Bottom-ROI binarised');
+
     [r,c] = find(roi==1);
-    med_c = median(c);
- 
-    
-    err = (med_c - (W)/2) / (W/2); % range approx [-1, 1]
-    
-    % PD Controller
-    Kp_turn = -0.5;  % Proportional gain
-    Kd_turn = -0.1;  % Derivative gain (start with ~20% of Kp)
-    
-    % Calculate derivative term
-    err_derivative = (err - prev_err) / dt;
-    
-    % PD control output
-    q = Kp_turn * err + Kd_turn * err_derivative;
-    
-    % Update previous error for next iteration
+    if isempty(c)
+        % No line detected in ROI -> gentle search behaviour
+        err = 0;                 % centre assumption
+        err_derivative = 0;
+        err_valid = false;
+        q = 0.3;                 % slow, bias a gentle turn to reacquire line
+        u = u_min;               % creep forward slowly while searching
+    else
+        med_c = median(c);
+        err   = (med_c - (W)/2) / (W/2);    % approx [-1,1]
+        if err_valid
+            err_derivative = (err - prev_err) / dt_ema;
+        else
+            err_derivative = 0;  % first valid sample, no D term
+            err_valid = true;
+        end
+        q = Kp_turn * err + Kd_turn * err_derivative;
+
+        % speed scales down as |err| grows; never below u_min
+        u = max(u_min, u_base * (1 - min(abs(err), 1)));
+    end
     prev_err = err;
-    
-    u_base = 0.2;
-    u_min = 0.05;
-    u = max(u_min, u_base * (1 - min(abs(err), 1)));
+
+    % --- Convert (u, q) to wheel speeds and command robot
     [wl, wr] = inverse_kinematics(u, q);
     pb.setVelocity(wl, wr);
+
+    % --- Update the landmark radar plot
+    % Assumption: landmark_centres is in the robot/camera coordinate frame
+    % with x forward, y left (if your detector returns a different convention,
+    % swap/negate axes below accordingly).
+    if ~isempty(landmark_centres)
+        xs = landmark_centres(:,1);
+        ys = landmark_centres(:,2);
+        set(landPts,'XData',xs,'YData',ys);
+
+        % Refresh text labels for IDs
+        if ~isempty(landTxt); delete(landTxt); end
+        landTxt = gobjects(0);
+        for i = 1:numel(marker_nums)
+            landTxt(end+1) = text(landAxes, xs(i), ys(i), sprintf('%d', marker_nums(i)), ...
+                'HorizontalAlignment','center','VerticalAlignment','bottom','FontWeight','bold');
+        end
+    else
+        set(landPts,'XData',nan,'YData',nan);
+        if ~isempty(landTxt); delete(landTxt); landTxt = []; end
+    end
+
+    % Optional: show loop timing/FPS in the radar title
+    title(landAxes, sprintf('Landmark Radar (dt=%.3f s, ~%.1f FPS)', dt_ema, 1/max(dt_ema,eps)));
+
     drawnow();
 end
 
-
 % Save the trajectory of the robot to a file.
 % Don't use this if you are using PiBot.
-%pb.saveTrail();
+% pb.saveTrail();
