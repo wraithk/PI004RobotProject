@@ -44,7 +44,9 @@ while true
     [wl, wr] = inverse_kinematics(u, q);
     
     pb.setVelocity(wl, wr);
+
     drawnow();
+
 end
 
 
