@@ -4,9 +4,9 @@ addpath("simulator/"); % Add the simulator to the MATLAB path.
 % pb.place([2.5;2.5], 0.6421);
 pb = PiBot('192.168.50.1'); % Use this command instead if using PiBot.
 
-% --- Visualisation: camera view
-figure('Name','PiBot Camera & Landmark Radar','NumberTitle','off');
-tiledlayout(1,2,'Padding','compact','TileSpacing','compact');
+% --- Visualisation: camera view, landmark radar, and robot path
+figure('Name','PiBot Camera, Landmark Radar & Path','NumberTitle','off');
+tiledlayout(1,3,'Padding','compact','TileSpacing','compact');
 camAxes = nexttile; title(camAxes,'Bottom-ROI binarised'); axis(camAxes,'ij');
 landAxes = nexttile; hold(landAxes,'on'); grid(landAxes,'on'); axis(landAxes,'equal');
 xlabel(landAxes,'x forward (m)'); ylabel(landAxes,'y left (m)'); title(landAxes,'Landmark Radar (Robot at [0,0])');
@@ -14,6 +14,10 @@ xlim(landAxes,[-0.5 1.5]); ylim(landAxes,[-1 1]); % tweak as needed
 robotDot = plot(landAxes,0,0,'ko','MarkerFaceColor','k','MarkerSize',6);
 landPts  = scatter(landAxes,nan,nan,'filled');
 landTxt  = []; % handles to text labels
+pathAxes = nexttile; hold(pathAxes,'on'); grid(pathAxes,'on'); axis(pathAxes,'equal');
+xlabel(pathAxes,'x (m)'); ylabel(pathAxes,'y (m)'); title(pathAxes,'Robot Path');
+pathLine = plot(pathAxes,0,0,'b-','LineWidth',2);
+currentPos = plot(pathAxes,0,0,'ro','MarkerFaceColor','r','MarkerSize',8);
 
 % --- ArUco & camera params
 addpath('arucoDetector/include');
@@ -26,6 +30,11 @@ CamParam = load("CamParam.mat");
 % --- Line following control state
 prev_err = 0; 
 err_valid = false;
+
+% --- Path tracking state (starting at origin in body-fixed frame)
+robot_state = [0; 0; 0];  % [x; y; theta] starting at origin
+path_x = 0;               % path history
+path_y = 0;
 
 % Controller gains
 Kp_turn = -0.5;    % P gain
@@ -93,6 +102,11 @@ while true
     % --- Convert (u, q) to wheel speeds and command robot
     [wl, wr] = inverse_kinematics(u, q);
     pb.setVelocity(wl, wr);
+    
+    % --- Update robot path using kinematics integration
+    robot_state = integrate_kinematics(robot_state, dt_ema, u, q);
+    path_x(end+1) = robot_state(1);
+    path_y(end+1) = robot_state(2);
 
     % --- Update the landmark radar plot
     % Assumption: landmark_centres is in the robot/camera coordinate frame
@@ -117,6 +131,19 @@ while true
 
     % Optional: show loop timing/FPS in the radar title
     title(landAxes, sprintf('Landmark Radar (dt=%.3f s, ~%.1f FPS)', dt_ema, 1/max(dt_ema,eps)));
+    
+    % --- Update robot path plot
+    set(pathLine, 'XData', path_x, 'YData', path_y);
+    set(currentPos, 'XData', robot_state(1), 'YData', robot_state(2));
+    
+    % Auto-scale path plot to show full trajectory
+    if length(path_x) > 1
+        margin = 0.1;
+        x_range = [min(path_x) - margin, max(path_x) + margin];
+        y_range = [min(path_y) - margin, max(path_y) + margin];
+        xlim(pathAxes, x_range);
+        ylim(pathAxes, y_range);
+    end
 
     drawnow();
 end
